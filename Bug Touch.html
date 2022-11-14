@@ -1,0 +1,188 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>Bug Touch</title>
+    <meta name="description" content="Just touch bugs!" />
+    
+    <style>*, *:before, *:after {
+  box-sizing: border-box; 
+}
+html {
+  font-size: 62.5%;
+}
+body {
+  color: #444;
+  background-color: hsl(0, 0%, 96%);
+}
+h1 {
+  font-size: 1.8rem;
+}
+
+</style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/gh/phinajs/phina.js@v0.2.3/build/phina.js"></script>
+    <script>// グローバルに展開
+phina.globalize();
+/*
+* アセット
+*/ 
+var ASSETS = {
+  // 画像
+  image: {
+    'wall':'https://raw.github.com/alkn203/bugtouch/master/assets/wall.png',
+    'bug': 'https://raw.github.com/alkn203/bugtouch/master/assets/bug3.png',
+  },
+};
+/*
+ * 定数
+ */
+// パラメータ
+var SCREEN_WIDTH  = 640;  // 画面の幅
+var SCREEN_HEIGHT = 960;  // 画面の高さ
+var BUG_MAX_NUM   = 20;   // 虫の数
+var BUG_WIDTH     = 64;   // 虫の幅
+var BUG_HEIGHT    = 64;   // 虫の高さ
+var BUG_MOVE_TIME = 800;  // 虫の移動時間
+var BUG_MOVE_MIN  = 100;  // 虫の移動最小値
+var BUG_MOVE_MAX  = 300;  // 虫の移動最大値
+var BUG_FADE_TIME = 1000; // 虫のフェードアウト時間
+/*
+ * メインシーン
+ */
+phina.define("MainScene", {
+  // 継承
+  superClass: 'DisplayScene',
+  // 初期化
+  init: function() {
+    // 親クラス初期化
+    this.superInit({
+    });
+    // 背景色
+    this.backgroundColor = 'silver';
+    // 背景を生成, 表示
+    Sprite('wall').addChildTo(this)
+                  .setPosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+    // 虫の数をセット
+    this.bugNum = BUG_MAX_NUM;
+    // 虫を生成
+    BUG_MAX_NUM.times(function() {
+      var bug = Bug().addChildTo(this);
+      bug.x = Random.randfloat(0, SCREEN_WIDTH - BUG_WIDTH);
+      bug.y = Random.randfloat(0, SCREEN_HEIGHT - BUG_HEIGHT);
+    }, this);
+  },
+  // 毎フレーム更新
+  update: function(app) {
+    // クリアチェック
+    if (this.bugNum <= 0) {
+      // 経過時間
+      var time = Math.floor(app.frame / app.fps);
+      var msg  = time + "秒でクリアしました!!";
+      // ゲーム終了
+      this.exit({
+          message: msg,
+      });
+    }
+  },
+});
+/*
+ * 虫クラス
+ */
+phina.define('Bug', {
+  // Spriteクラスを継承
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit('bug', BUG_WIDTH, BUG_HEIGHT);
+    // フレームインデックス設定
+    this.frameIndex = 0;
+    // タッチを有効に
+    this.setInteractive(true);
+    // 移動距離をランダムにする
+    this.distance = Random.randfloat(BUG_MOVE_MIN, BUG_MOVE_MAX);
+    // 移動処理をセット
+    this.move();
+  },
+  // 移動処理
+  move: function() {
+    // ランダムな方向
+    this.rotation = Random.randfloat(0, 360);
+    // 方向ベクトル
+    var vec = Vector2().fromDegree(this.rotation + 270, this.distance);
+    // 等速度で移動させるための時間を計算
+    var realTime = (this.distance / BUG_MOVE_MAX) * BUG_MOVE_TIME;
+    var self = this;
+    // tweener設定
+    this.tweener.clear()
+                .by({x: vec.x, y: vec.y}, realTime)
+                .wait(realTime)
+                .call(function() {
+                  // 再帰呼び出し
+                  self.move();
+                });
+  },
+  // 消去処理
+  destroy: function() {
+    // 更新処理を無効にする
+    this.update = null;
+    // タッチ不可にする
+    this.setInteractive(false);
+    // フレーム画像変更
+    this.frameIndex = 2;
+    
+    var self = this;
+    // 落下アニメーション
+    this.tweener.clear()
+                .to({y: SCREEN_HEIGHT}, 1000, 'easeOutBounce')
+                .call(function() {
+                  // 虫の数を減らして削除
+                  self.parent.bugNum--;
+                  self.remove();
+                });
+  },
+  // 更新処理
+  update: function(app) {
+    // フレームアニメーション画像切替え
+    if (app.frame % 4 === 0) {
+      this.frameIndex = this.frameIndex === 0 ? 1 : 0;
+    }
+    // 画面からはみ出ないよう制御
+    var left   = 0;
+    var right  = SCREEN_WIDTH;
+    var top    = 0;
+    var bottom = SCREEN_HEIGHT;
+        
+    if (this.left < left) this.left = left;
+    else if (right < this.right) this.right = right;
+    if (this.top < top) this.top = top;
+    else if (bottom < this.bottom) this.bottom = bottom;
+  },
+  // タッチ時処理
+  onpointstart: function() {
+    // 消去処理
+    this.destroy();  
+  },
+});
+/*
+ * メイン処理
+ */
+phina.main(function() {
+  // アプリケーションを生成
+  var app = GameApp({
+    assets: ASSETS, // アセット読み込み
+    startLabel: 'main', // MainScene から開始
+  });
+  //app.enableStats();
+  // 実行
+  app.run();
+});</script>
+  </body>
+</html>
+
